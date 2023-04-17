@@ -1,0 +1,355 @@
+# Group 8: KYUNGJIN BAIK, SHRUTANVI DATAR, TRANG NGUYEN, VRINDA SEHGAL
+
+# Import data
+airline <- Airline_Satisfaction_Data
+
+# Load library
+library(tidyverse)
+library(factoextra)
+library(janitor)
+library(Metrics)
+library(caret)
+library(aod)
+
+### EXPLORATORY DATA ANALYSIS
+# Names of columns of data
+names(airline)
+
+# Change columns name of data
+airline <- clean_names(airline)
+
+# Structure of data
+str(airline)
+
+# Check the missing values
+colSums(is.na(airline))
+# There are missing values in columns of flight_time, arrival_delay, 
+# and departure_delay.
+
+# Verify whether these missing values resulted from cancelled flights
+cancelled_flight <- subset(airline, subset = flight_cancelled=="Yes")
+unique(cancelled_flight$flight_time)
+sum(is.na(cancelled_flight$flight_time))    
+# 393 out of 418 missing values of flight_time were from cancelled flights.
+unique(cancelled_flight$arrival_delay)
+sum(is.na(cancelled_flight$arrival_delay))  
+# 393 out of 418 missing values of arrival_delay were from cancelled flights.
+unique(cancelled_flight$departure_delay)
+sum(is.na(cancelled_flight$departure_delay)) 
+# All 379 missing values of departure_delay were from cancelled flights.
+
+# Convert to factor
+airline[,c(2,3,5,6,9,11,12,14,16,19:21)]<-lapply(airline[,c(2,3,5,6,9,11,12,14,16,19:21)], factor)
+# Summarize data
+summary(airline)
+
+## Plot 1: Age Distribution of the Flyers
+ggplot(airline, aes(x=age)) +
+  geom_histogram(binwidth=2, fill="#ADD8E6", color="#003366", alpha=0.9) +
+  labs(title="Age Distribution", x="Age", y="Number of Customers") 
+
+## Plot 2: Customer Satisfaction by Class
+airline %>%
+  group_by(class, satisfaction) %>%
+  summarise(n = n()) %>%
+  mutate(pct = n / sum(n)) %>%
+  ggplot(aes(x = class, y = pct, fill = satisfaction)) +
+  geom_col(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Class", y = "Percentage of customers", fill = "Satisfaction",
+       title="Customer Satisfaction by Class")
+
+# Divided the above class plot by airline
+
+# Primera Air #
+airline %>%
+  filter(airline_name == "Primera Air") %>%
+  group_by(class, satisfaction) %>%
+  summarise(n = n()) %>%
+  mutate(pct = n / sum(n)) %>%
+  ggplot(aes(x = class, y = pct, fill = satisfaction)) +
+  geom_col(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Class", y = "Percentage of customers", fill = "Satisfaction") +
+  ggtitle("Customer Satisfaction by Class for Primera Air")
+
+# Wow Air #
+airline %>%
+  filter(airline_name == "Wow Air") %>%
+  group_by(class, satisfaction) %>%
+  summarise(n = n()) %>%
+  mutate(pct = n / sum(n)) %>%
+  ggplot(aes(x = class, y = pct, fill = satisfaction)) +
+  geom_col(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Class", y = "Percentage of customers", fill = "Satisfaction") +
+  ggtitle("Customer Satisfaction by Class for Wow Air")
+
+## Plot 3: Customer Satisfaction by age
+# Filter the data by satisfaction level
+satisfied <- filter(airline, satisfaction == "Satisfied")
+not_satisfied <- filter(airline, satisfaction == "Not Satisfied")
+
+# Create a count of customers by age
+satisfied_age_count <- satisfied %>% 
+  group_by(age) %>% 
+  summarize(count = n())
+not_satisfied_age_count <- not_satisfied %>% 
+  group_by(age) %>% 
+  summarize(count = n())
+
+# Create the line plot
+ggplot() +
+  geom_line(data = satisfied_age_count, aes(x = age, y = count, color = "Satisfied"), size = 1.2) +
+  geom_line(data = not_satisfied_age_count, aes(x = age, y = count, color = "Not Satisfied"), size = 1.2) +
+  scale_color_manual(name = "Satisfaction", values = c("Satisfied" = "blue", "Not Satisfied" = "red")) +
+  labs(x = "Age", y = "Count", title = "Count of Customers by Age and Satisfaction Level")
+
+## Plot 4: Customer Satisfaction by Departure Hour
+ggplot(airline, aes(x = scheduled_departure_hour, fill = satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_fill_manual(name = "Satisfaction", values = c("Not Satisfied" = "#FF6F61", "Satisfied" = "#A4C8F0")) +
+  labs(x = "Scheduled Departure Hour", y = "Percentage of Customers", 
+       title = "Customer Satisfaction by Scheduled Departure Hour") +
+  scale_y_continuous(labels = scales::percent)
+
+## Plot 5: Flight Count by Month and Purpose of Travel
+# Define the order of months
+month_order <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+# Count the number of flights by time and purpose
+flight_count <- airline %>% 
+  group_by(month_of_flight_date, type_of_travel) %>% 
+  summarize(count = n())
+
+# Creat a plot
+ggplot(flight_count, aes(x = month_of_flight_date, y = count, fill = type_of_travel)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_x_discrete(limits = month_order) +
+  labs(title = "Flight Count by Month and Purpose of Travel",
+       x = "Month of Flight",
+       y = "Flight Count",
+       fill = "Purpose of Travel")
+
+## Plot 6: Flight Counts by Month and Airline Name
+# Create the summary table
+flight_count1 <- airline %>%
+  group_by(month_of_flight_date, airline_name) %>%
+  summarise(count = n()) %>%
+  mutate(month_of_flight_date = factor(month_of_flight_date, levels = month_order))
+
+# Create the plot
+ggplot(flight_count1, aes(x = month_of_flight_date, y = count, fill =airline_name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Flight Counts by Month and Airline Name", x = "Type of Flight Date", 
+       y = "Flight Count", fill = "name") +
+  scale_fill_manual(values = c("#619cff", "#f8766d")) +
+  theme_classic()
+
+## Plot 7: Satisfaction Counts by Type of Travel
+ggplot(airline, aes(x=type_of_travel, fill=satisfaction)) + 
+  geom_bar() +
+  labs(title="Satisfaction Counts by Type of Travel", x="Type of Travel", y="Count", fill="Satisfaction") +
+  scale_fill_manual(values=c("#69b3a2", "#f8766d")) +
+  theme_classic()
+
+## Plot 8: Satisfaction levels of customers based on Travel type of Primera Air
+ggplot(subset(airline, airline_name == "Primera Air"), 
+       aes(x=type_of_travel, fill=satisfaction)) + 
+  geom_bar(position="fill") + 
+  ggtitle("Satisfaction levels of customers based on Travel type of Primera Air") +
+  xlab("Type of Travel") +
+  ylab("Percentage of Customers")
+
+## Plot 9: Satisfaction levels of customers based on Travel type of Wow Air
+ggplot(subset(airline, airline_name == "Wow Air"), 
+       aes(x=type_of_travel, fill=satisfaction)) + 
+  geom_bar(position="fill") + 
+  ggtitle("Satisfaction levels of customers based on Travel type of Wow Air") +
+  xlab("Type of Travel") +
+  ylab("Percentage of Customers")
+
+## Plot 10: Customer Satisfaction by Number of Previous Flights
+ggplot(airline,aes(x=satisfaction,y=no_of_flights))+
+  geom_boxplot(aes(fill=satisfaction)) +
+  ggtitle("Customer Satisfaction by Number of Previous Flights") + 
+  xlab("") +
+  ylab("Number of Previous Flights by Customer")
+
+## Plot 11: Customer Satisfaction by Gender
+ggplot(airline, aes(x=gender, fill=satisfaction)) + 
+  geom_bar() +
+  labs(title="Satisfaction Counts by Gender", x="Gender", y="Count", fill="Satisfaction") +
+  scale_fill_manual(values=c("#69b3a2", "#f8766d")) +
+  theme_classic()
+
+## Plot 12: Number of Customers by month and gender
+# Define the order of the factor levels
+month_order <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+# Create the summary table
+flight_count <- airline %>%
+  group_by(month_of_flight_date, gender) %>%
+  summarise(count = n()) %>%
+  mutate(month_of_flight_date = factor(month_of_flight_date, levels = month_order))
+# Create the plot
+ggplot(flight_count, aes(x = month_of_flight_date, y = count, fill = gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Number of Customers by Month and Gender", x = "Month of Flight Date", 
+       y = "Number of Customers", fill = "Gender") +
+  scale_fill_manual(values = c("#619cff", "#f8766d")) +
+  theme_classic()
+
+## Plot 13: Customer Satisfaction by Airline Status
+ggplot(airline, aes(x = airline_status, fill = satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_fill_manual(name = "Satisfaction", values = c("Not Satisfied" = "#FF6F61", "Satisfied" = "#A4C8F0")) +
+  labs(x = "Airline Status", 
+       y = "Percentage of Customers", 
+       title = "Customer Satisfaction by Airline Status") +
+  scale_y_continuous(labels = scales::percent)
+
+# Plot 14: Customer Satisfaction by Flight Status
+ggplot(airline, aes(x=flight_cancelled, fill=satisfaction)) +
+  geom_bar(position="dodge") +
+  geom_text(stat="count", aes(label=..count..),
+            position=position_dodge(width=0.9),
+            vjust=-0.2, size=3) +
+  labs(x="Flight Status", y="Number of Customers", fill="") +
+  ggtitle("Customer Satisfaction by Flight Status") +  
+  scale_fill_brewer(palette="Pastel2") +
+  theme(legend.position="top") +
+  scale_x_discrete(labels=c('Not Cancelled', 'Cancelled'))
+
+### LOGISTIC REGRESSION
+# Create binomial dependent variable 
+airline <- airline %>% mutate("satisfied"=ifelse(satisfaction=="Satisfied", 1, 0))
+
+# Convert satisfied to factor
+airline$satisfied <- as.factor(airline$satisfied)
+
+# Check whether the cancellation is the reason for dissatisfaction. 
+# (excluding flight_time, arrival_delay, and departure_delay)
+logit <- glm(satisfied ~ airline_status + age + gender + type_of_travel +
+               shopping_amount_at_airport + eating_and_drinking_amounts_at_airport +
+               class + day_of_flight_date + month_of_flight_date +
+               no_of_flights + airline_name + scheduled_departure_hour + 
+               flight_distance + flight_cancelled,
+              family="binomial", data=airline)
+# Summary of the model
+summary(logit)
+# flight_cancelled is not statistically significant in the model.
+
+# Subset flights which were not cancelled
+df <- subset(airline, subset = flight_cancelled=="No")
+
+# Check the missing values
+colSums(is.na(df))
+# There are some missing values in columns of flight_time and arrival_delay.
+
+# Check whether they are in the same records
+count(subset(df, is.na(flight_time) & is.na(arrival_delay)))
+
+# Drop missing values
+df <- na.omit(df)
+
+# Check to make sure there is no missing value
+sum(is.na(df))
+
+# Check correlations between arrival_delay and departure_delay
+cor.test(df$arrival_delay, df$departure_delay, method = "pearson")
+
+# Check correlations between flight_time and flight_distance
+cor.test(df$flight_time, df$flight_distance, method = "pearson")
+# Both correlations are about 0.96. So, they are strongly correlated.
+
+# Initiate seed
+set.seed(123)
+
+# Samples for dividing into training and test data
+samples <- sample(c(1, 2), size=nrow(df), replace=TRUE, prob=c(0.8,0.2))
+train <- df[samples==1,]
+test <- df[samples==2,]
+
+# Choose meaningful variables using Forward Stepwise Regression
+full_model <- glm(satisfied ~ airline_status + age + gender + type_of_travel +
+                    shopping_amount_at_airport + eating_and_drinking_amounts_at_airport +
+                    class + day_of_flight_date + month_of_flight_date + no_of_flights + 
+                    airline_name + flight_time + arrival_delay + departure_delay +  
+                    scheduled_departure_hour + flight_distance, 
+                  family = 'binomial', data = train)
+null_model <- glm(satisfied ~ 1, family = 'binomial', data = train)
+forwards <- step(null_model, 
+                 scope=list(lower=formula(null_model), 
+                            upper=formula(full_model)), 
+                 direction="forward")
+
+# Remove non statistically significant variables and flight_distance
+reduced_model <- glm(satisfied ~ type_of_travel + airline_status + arrival_delay +
+                       gender + no_of_flights + scheduled_departure_hour + 
+                       airline_name + class + flight_time +
+                       shopping_amount_at_airport + age,
+                     family = 'binomial', data = train)
+
+# Summary of the model
+summary(reduced_model)
+
+# Compare two models to see which model that explained dependent variable better
+anova(reduced_model, full_model, test="Chisq")
+# The output does not display significant chi-square value with p-values = 0.2908.
+# It means that the second model fits as well as the previous model.
+
+# Coefficients of the model
+coef(reduced_model)
+
+# Exponentiate the coefficients
+exp(coef(reduced_model))
+
+# Confidence intervals for the coefficient estimates using standard errors
+confint.default(reduced_model)
+
+# Summarize table about coefficients and confidence intervals
+exp(cbind(coef = coef(reduced_model), confint.default(reduced_model)))
+
+# Test for the overall effect of variable using the wald.test function
+# Test for an overall effect of type_of_travel 
+wald.test(b = coef(reduced_model), Sigma = vcov(reduced_model), Terms = 2:3)
+# Test for an overall effect of airline_status 
+wald.test(b = coef(reduced_model), Sigma = vcov(reduced_model), Terms = 4:6)
+# Test for an overall effect of scheduled_departure_hour 
+wald.test(b = coef(reduced_model), Sigma = vcov(reduced_model), Terms = 10:26)
+# Test for an overall effect of class 
+wald.test(b = coef(reduced_model), Sigma = vcov(reduced_model), Terms = 28:29)
+# The overall effects of these variables are statistically significant.
+
+# Analyze the table of deviance
+anova(reduced_model, test="Chisq")
+
+# Predict probabilities on test data
+prob <- predict(reduced_model, newdata = test, type = "response")
+
+# Make predictions in term of satisfaction
+y_pred <- ifelse(prob > 0.5, 1, 0)
+
+# Convert to a factor
+y_pred <- factor(y_pred)
+
+# Extract values of y_test
+y_test <- test$satisfied
+
+# Calculate the accuracy
+mean(y_pred == y_test)  
+
+# Plot ROC curve
+library(ROCR)
+pred <- prediction(prob, test$satisfied)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+plot(perf)
+
+# Calculate AUC
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+# Confusion Matrix and Statistics
+confusionMatrix(data = y_pred, reference = test$satisfied, positive = "1")
